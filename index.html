@@ -117,7 +117,7 @@ label{font-size:12px;font-weight:800;display:grid;gap:6px;color:var(--mut);text-
 .pill[aria-pressed=true]{background:linear-gradient(180deg,var(--red),var(--red-2));border-color:var(--red-ink);color:#fff;box-shadow:0 2px 0 var(--red-ink),0 10px 20px rgba(215,33,43,.3)}
 @media (prefers-color-scheme:dark){.pill[aria-pressed=true]{box-shadow:0 0 0 1px rgba(255,46,63,.6),0 0 24px rgba(255,46,63,.5)}}
 .srt{display:flex;justify-content:space-between;align-items:center;gap:10px}.srt select{width:auto;min-height:40px;padding:6px 12px;font-weight:700;font-size:13px}
-.feed{display:grid;gap:16px;padding-bottom:80px}
+.feed{display:grid;gap:16px;padding-bottom:80px;content-visibility:auto;contain-intrinsic-size:400px;}
 
 /* POST CARD */
 .post{position:relative}
@@ -187,11 +187,6 @@ const firebaseConfig = {
 };
 const V="10.12.2",B=`https://www.gstatic.com/firebasejs/${V}/`;
 let F={},auth,db,an,demo=false;
-try{
- const [a,au,fs,ay]=await Promise.all([import(B+"firebase-app.js"),import(B+"firebase-auth.js"),import(B+"firebase-firestore.js"),import(B+"firebase-analytics.js")]);
- F={...au,...fs};const fa=a.initializeApp(firebaseConfig);auth=au.getAuth(fa);db=fs.getFirestore(fa);
- ay.isSupported().then(ok=>{if(ok)an=ay.getAnalytics(fa)}).catch(()=>{});F.logEvent=ay.logEvent;
-}catch(e){demo=true}
 const track=(n,p)=>{try{an&&F.logEvent(an,n,p)}catch{}};
 const $=s=>document.querySelector(s),app=$("#app");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -209,6 +204,7 @@ function normUrl(u,req){u=(u||"").trim();if(!u){if(req)throw{msg:"Enter a websit
 const ini=n=>(n||"?").split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
 const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40);
 const isDemo=()=>{if(demo){toast("Demo mode: Firebase couldn't load, so this action is unavailable.",1);return true}};
+function debounce(func, wait) {let timeout;return function(...args) {clearTimeout(timeout);timeout = setTimeout(() => func.apply(this, args), wait);};}
 
 /* ---------- Screens ---------- */
 function landing(){S.view="land";S.creating=false;
@@ -217,7 +213,7 @@ function landing(){S.view="land";S.creating=false;
  <div class="two"><section class="card"><h2>Search Your College</h2><div class="row"><input id="cq" type="search" placeholder="Search your college..." aria-label="Search your college" autocomplete="off"><button class="btn pri" data-a="cs">Search</button></div><div class="res" id="cres"></div></section>
  <section class="card"><h2>Create Your College Media</h2><p class="mut" style="margin-bottom:14px">Can't find your college? Create its student community.</p><button class="btn pri" data-a="newc">Create College Media →</button></section></div>
  <p class="mut">One college. One community. Thousands of ideas.</p></main>`;
- $("#cq").addEventListener("input",collegeRes);collegeRes()}
+ $("#cq").addEventListener("input",debounce(collegeRes, 300));collegeRes()}
 function collegeRes(){const q=($("#cq")?.value||"").trim().toLowerCase(),el=$("#cres");if(!el)return;if(!q){el.innerHTML="";return}
  const m=S.colleges.filter(c=>[c.name,c.shortName,c.city].some(v=>(v||"").toLowerCase().includes(q))).slice(0,6);
  if(q.length>2)track("college_searched");
@@ -242,8 +238,10 @@ function home(){const p=S.profile;S.view="home";
  app.innerHTML=`${shell()}<main class="wrap"><div class="head"><h1>${esc(p.collegeShortName)}</h1><p style="font-size:18px;font-weight:600;margin-top:4px">Your campus, online.</p><p class="mut">Discover what students around you are building.</p><div class="stats" id="st"><span><b>–</b> Students</span><span><b>${S.posts.length}</b> Projects</span><span><b>${S.posts.filter(x=>x.category==="Website").length}</b> Websites</span></div></div>
  <div class="bar"><input id="sq" type="search" placeholder="Search your campus..." aria-label="Search your campus" value="${esc(S.q)}"><div class="pills" role="group" aria-label="Filter by category">${FILT.map(f=>`<button class="pill" data-a="flt" data-id="${f[1]}" aria-pressed="${S.f===f[1]}">${f[0]}</button>`).join("")}</div>
  <div class="srt"><span class="mut" id="cnt"></span><select id="so" aria-label="Sort"><option value="latest">Latest</option><option value="oldest">Oldest</option><option value="updated">Recently updated</option></select></div></div><div class="feed" id="feed"></div></main>`;
- $("#so").value=S.sort;$("#sq").addEventListener("input",e=>{S.q=e.target.value;feed();if(S.q.length>2)track("search_performed")});$("#so").addEventListener("change",e=>{S.sort=e.target.value;feed()});feed();stats()}
-async function stats(){if(demo)return;try{const r=await F.getCountFromServer(F.query(F.collection(db,"users"),F.where("collegeId","==",S.profile.collegeId)));const el=$("#st b");if(el)el.textContent=r.data().count}catch{}}
+ $("#so").value=S.sort;
+ $("#sq").addEventListener("input",debounce(e=>{S.q=e.target.value;feed();if(S.q.length>2)track("search_performed")}, 300));
+ $("#so").addEventListener("change",e=>{S.sort=e.target.value;feed()});feed();stats()}
+async function stats(){if(demo||!S.profile)return;try{const r=await F.getCountFromServer(F.query(F.collection(db,"users"),F.where("collegeId","==",S.profile.collegeId)));const el=$("#st b");if(el)el.textContent=r.data().count}catch{}}
 const ts=x=>x?.createdAt?.toDate?.().getTime?.()||0,tu=x=>x?.updatedAt?.toDate?.().getTime?.()||ts(x);
 function card(x,own){
   const d=x.createdAt?.toDate?.().toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})||"Just now";
@@ -286,10 +284,14 @@ function commentsModal(post){
 }
 
 /* ---------- Data ---------- */
-async function loadColleges(){if(demo){S.colleges=[DEMO_COLLEGE];return}try{const s=await F.getDocs(F.collection(db,"colleges"));S.colleges=s.docs.map(d=>({id:d.id,...d.data()}))}catch(e){console.error(e)}}
+async function loadColleges(){if(demo){S.colleges=[DEMO_COLLEGE];return}try{const s=await F.getDocs(F.collection(db,"colleges"));S.colleges=s.docs.map(d=>({id:d.id,...d.data()}))}catch(e){console.error("Error loading colleges:", e)}}
 async function enter(){drawer(false);skeleton();
  if(demo){S.profile={name:"Demo Student",username:"demo",branch:"CSE",year:"3rd Year",collegeId:"demo",collegeName:DEMO_COLLEGE.name,collegeShortName:"PIEMR",bio:""};S.posts=DEMO_POSTS;return home()}
- try{const s=await F.getDocs(F.query(F.collection(db,"posts"),F.where("collegeId","==",S.profile.collegeId)));S.posts=s.docs.map(d=>({id:d.id,...d.data()}))}catch(e){console.error(e);S.posts=[];toast(fe(e),1)}
+ try{
+   const q = F.query(F.collection(db,"posts"), F.where("collegeId","==",S.profile.collegeId), F.limit(100));
+   const s=await F.getDocs(q);
+   S.posts=s.docs.map(d=>({id:d.id,...d.data()}))
+ }catch(e){console.error(e);S.posts=[];toast(fe(e),1)}
  home()}
 async function route(u){
  if(!u){S.profile=null;S.posts=[];return landing()}
@@ -304,7 +306,7 @@ const A={
  newc(){if(isDemo())return;S.college=null;S.creating=true;auth.currentUser?setupScreen():authScreen("up")},
  home0(){S.college=null;S.creating=false;landing()},
  signup(){authScreen("up")},
- async google(_,b){if(isDemo())return;await run(b,"Signing in...",async()=>{try{await F.signInWithPopup(auth,new F.GoogleAuthProvider());track("login",{method:"google"})}catch(e){toast(e.code==="auth/popup-closed-by-user"?"Google sign-in was cancelled.":"Google sign-in couldn't be completed. Please try again.",1)}})},
+ async google(_,b){if(isDemo())return;await run(b,"Signing in...",async()=>{try{await F.signInWithPopup(auth,new F.GoogleAuthProvider());track("login",{method:"google"})}catch(e){toast(e.code==="auth/popup-closed-by-user"?"Google sign-in was cancelled.":"Google sign-in couldn't be completed. Please check your Firebase Authorized Domains.",1)}})},
  reset(){resetModal()},menu(){drawer(true)},menu0(){drawer(false)},mclose(_,__,e){if(e.target.classList.contains("ov")||e.target.dataset.a==="mclose")mclose()},
  flt(id){S.f=id;home()},clr(){S.f="";S.q="";home()},
  visit(){track("website_clicked")},
@@ -390,8 +392,35 @@ document.addEventListener("click",e=>{const t=e.target.closest("[data-a]");if(!t
 document.addEventListener("submit",e=>{e.preventDefault();const h=H[e.target.dataset.f];if(h)h(e.target)});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){mclose();drawer(false)}});
 
-/* ---------- Boot ---------- */
-await loadColleges();
-if(demo)landing();
-else F.onAuthStateChanged(auth,u=>{if(S.signing)return;route(u).catch(e=>{console.error(e);toast(fe(e),1);landing()})});
+/* ---------- Boot (Non-Blocking) ---------- */
+(async function boot() {
+  try {
+    const [a,au,fs,ay]=await Promise.all([import(B+"firebase-app.js"),import(B+"firebase-auth.js"),import(B+"firebase-firestore.js"),import(B+"firebase-analytics.js")]);
+    F={...au,...fs};
+    const fa=a.initializeApp(firebaseConfig);
+    auth=au.getAuth(fa);
+    db=fs.getFirestore(fa);
+    ay.isSupported().then(ok=>{if(ok)an=ay.getAnalytics(fa)}).catch(()=>{});
+    F.logEvent=ay.logEvent;
+  } catch(e) {
+    console.warn("Firebase failed to initialize, falling back to demo mode.", e);
+    demo=true;
+  }
+
+  // Render UI immediately, do not wait for database!
+  if(demo) {
+    landing();
+  } else {
+    F.onAuthStateChanged(auth, u => {
+      if(S.signing) return;
+      route(u).catch(e=>{
+        console.error("Auth routing error:", e);
+        toast(fe(e),1);
+        landing();
+      });
+    });
+    // Load colleges in the background so search works when they type
+    loadColleges().catch(console.error);
+  }
+})();
 </script></body></html>
